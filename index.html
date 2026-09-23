@@ -122,12 +122,19 @@
         .btn-secondary { background-color: #333333; color: #fff; }
         .btn-danger { background-color: var(--danger); }
         .btn-accent { background-color: var(--accent); color: #000; }
-        #reader-container {
+        #reader-container, #photo-preview-container {
             width: 100%;
             border-radius: 8px;
             overflow: hidden;
             margin-top: 10px;
             display: none;
+        }
+        #photo-video {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 8px;
+            background: #000;
         }
         .status-msg {
             font-size: 0.85rem;
@@ -192,14 +199,19 @@
             <div class="card">
                 <h2>📷 Leitura de Código de Barras</h2>
                 
-                <button class="btn btn-accent" onclick="document.getElementById('barcode-file-input').click()">
+                <button class="btn btn-accent" onclick="abrirCapturaFotoTraseira()">
                     📷 Capturar Foto do Código (Câmera Traseira)
                 </button>
-                <input type="file" id="barcode-file-input" accept="image/*" capture="user" style="display:none;" onchange="processarImagemCodigo(this)">
 
                 <button class="btn btn-secondary" style="margin-top:8px;" onclick="iniciarLeitorAoVivo()">🎥 Abrir Câmera Traseira ao Vivo</button>
-                <button class="btn btn-danger" id="btn-parar-ao-vivo" style="display:none; margin-top:8px;" onclick="pararLeitorAoVivo()">⏹️ Parar Câmera</button>
+                <button class="btn btn-danger" id="btn-parar-ao-vivo" style="display:none; margin-top:8px;" onclick="pararTudoCamera()">⏹️ Parar Câmera</button>
                 
+                <!-- Modal de Captura de Foto Nativa Forçada -->
+                <div id="photo-preview-container">
+                    <video id="photo-video" playsinline autoplay></video>
+                    <button class="btn" style="margin-top:6px;" onclick="tirarFotoEProcessar()">📸 Bater Foto e Ler Código</button>
+                </div>
+
                 <div id="reader-container">
                     <div id="reader"></div>
                 </div>
@@ -276,8 +288,7 @@
                 <h2>🧾 Registrar Cupom Fiscal</h2>
                 <p style="font-size:0.85rem; color:var(--text-sub);">Fotografe o cupom para realizar a leitura OCR automática dos itens, quantidades e descontos.</p>
                 
-                <input type="file" id="cupom-img-input" accept="image/*" style="display:none;" onchange="registrarFotoCupom(this)">
-                <button class="btn" onclick="document.getElementById('cupom-img-input').click()">📷 Tirar Foto do Cupom</button>
+                <button class="btn" onclick="abrirCapturaCupomTraseira()">📷 Tirar Foto do Cupom (Câmera Traseira)</button>
                 <p id="ocr-status" class="status-msg"></p>
             </div>
 
@@ -308,6 +319,7 @@
 
     <script>
         let html5QrCode = null;
+        let photoStream = null;
         let lastDetectedCode = "";
         let detectionCount = 0;
         let carrinho = JSON.parse(localStorage.getItem('cc_carrinho')) || [];
@@ -328,7 +340,7 @@
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             if(evt) evt.currentTarget.classList.add('active');
-            if(tabId !== 'tab-compra') pararLeitorAoVivo();
+            if(tabId !== 'tab-compra') pararTudoCamera();
         }
 
         // --- BUSCA DE PRODUTOS ---
@@ -374,27 +386,68 @@
             }
         }
 
-        // --- LEITOR VIA FOTO ---
-        function processarImagemCodigo(input) {
-            if (!input.files || input.files.length === 0) return;
-            const file = input.files[0];
+        // --- CAPTURA DE FOTO FORÇANDO CÂMARA TRASEIRA VIA MEDIASTREAM ---
+        async function abrirCapturaFotoTraseira() {
+            pararTudoCamera();
+            const container = document.getElementById('photo-preview-container');
+            const video = document.getElementById('photo-video');
+            const btnParar = document.getElementById('btn-parar-ao-vivo');
             const statusEl = document.getElementById('barcode-status');
-            statusEl.innerText = "⏳ Processando imagem da foto...";
+
+            container.style.display = 'block';
+            btnParar.style.display = 'block';
+            statusEl.innerText = "Câmera traseira aberta. Enquadre o código e toque no botão abaixo para tirar a foto.";
+
+            try {
+                photoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } }
+                });
+            } catch (e) {
+                try {
+                    photoStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "environment" }
+                    });
+                } catch (err) {
+                    alert("Não foi possível acessar a câmera traseira: " + err);
+                    pararTudoCamera();
+                    return;
+                }
+            }
+
+            video.srcObject = photoStream;
+        }
+
+        function tirarFotoEProcessar() {
+            const video = document.getElementById('photo-video');
+            const statusEl = document.getElementById('barcode-status');
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            pararTudoCamera();
+            statusEl.innerText = "⏳ Processando foto do código de barras...";
 
             if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
 
-            html5QrCode.scanFile(file, true)
-                .then(decodedText => {
-                    statusEl.innerText = `✅ Código Lido: ${decodedText}`;
-                    buscarProdutoPorCodigo(decodedText);
-                })
-                .catch(err => {
-                    statusEl.innerText = "❌ Não foi possível ler o código na foto. Certifique-se de focar bem o código.";
-                });
+            canvas.toBlob((blob) => {
+                const file = new File([blob], "code_photo.jpg", { type: "image/jpeg" });
+                html5QrCode.scanFile(file, true)
+                    .then(decodedText => {
+                        statusEl.innerText = `✅ Código Lido: ${decodedText}`;
+                        buscarProdutoPorCodigo(decodedText);
+                    })
+                    .catch(err => {
+                        statusEl.innerText = "❌ Não foi possível ler o código na foto. Garanta boa iluminação e foco.";
+                    });
+            }, 'image/jpeg');
         }
 
         // --- LEITOR CÂMARA AO VIVO ---
         async function iniciarLeitorAoVivo() {
+            pararTudoCamera();
             document.getElementById('reader-container').style.display = 'block';
             document.getElementById('btn-parar-ao-vivo').style.display = 'block';
             const statusEl = document.getElementById('barcode-status');
@@ -425,7 +478,7 @@
                 }
 
                 if (detectionCount >= 3) {
-                    pararLeitorAoVivo();
+                    pararTudoCamera();
                     buscarProdutoPorCodigo(decodedText);
                 } else {
                     statusEl.innerText = `⏳ Confirmando código: ${decodedText}...`;
@@ -433,44 +486,30 @@
             };
 
             try {
-                const devices = await Html5Qrcode.getCameras();
-                let backCameraId = null;
-
-                if (devices && devices.length > 0) {
-                    const backCam = devices.find(d => 
-                        d.label.toLowerCase().includes('back') || 
-                        d.label.toLowerCase().includes('traseira') || 
-                        d.label.toLowerCase().includes('rear') ||
-                        d.label.toLowerCase().includes('environment')
-                    );
-                    if (backCam) backCameraId = backCam.id;
-                    else backCameraId = devices[devices.length - 1].id;
-                }
-
-                if (backCameraId) {
-                    await html5QrCode.start(backCameraId, config, onScanSuccess, (err) => {});
-                } else {
-                    await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {});
-                }
+                await html5QrCode.start({ facingMode: { exact: "environment" } }, config, onScanSuccess, (err) => {});
             } catch (err) {
                 html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {})
                     .catch(e => {
                         alert("Erro ao abrir a câmera traseira: " + e);
-                        pararLeitorAoVivo();
+                        pararTudoCamera();
                     });
             }
         }
 
-        function pararLeitorAoVivo() {
+        function pararTudoCamera() {
+            if (photoStream) {
+                photoStream.getTracks().forEach(track => track.stop());
+                photoStream = null;
+            }
             if (html5QrCode && html5QrCode.isScanning) {
                 html5QrCode.stop().then(() => {
                     document.getElementById('reader-container').style.display = 'none';
-                    document.getElementById('btn-parar-ao-vivo').style.display = 'none';
                 }).catch(err => console.error(err));
             } else {
                 document.getElementById('reader-container').style.display = 'none';
-                document.getElementById('btn-parar-ao-vivo').style.display = 'none';
             }
+            document.getElementById('photo-preview-container').style.display = 'none';
+            document.getElementById('btn-parar-ao-vivo').style.display = 'none';
         }
 
         // --- CARRINHO ---
@@ -636,18 +675,45 @@
         }
 
         // --- CUPOM FISCAL + LEITURA OCR ---
-        function registrarFotoCupom(input) {
-            if (!input.files || input.files.length === 0) return;
-            const file = input.files[0];
-            const reader = new FileReader();
+        async function abrirCapturaCupomTraseira() {
+            pararTudoCamera();
+            const statusEl = document.getElementById('ocr-status');
+            statusEl.innerText = "Abra a câmera e bata a foto do cupom...";
 
-            reader.onload = function(e) {
-                const imgSrc = e.target.result;
+            let cupomStream = null;
+            try {
+                cupomStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } }
+                });
+            } catch (e) {
+                try {
+                    cupomStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "environment" }
+                    });
+                } catch (err) {
+                    alert("Não foi possível acessar a câmera traseira: " + err);
+                    return;
+                }
+            }
+
+            const videoTemp = document.createElement('video');
+            videoTemp.srcObject = cupomStream;
+            await videoTemp.play();
+
+            setTimeout(() => {
+                const canvas = document.createElement('canvas');
+                canvas.width = videoTemp.videoWidth || 1280;
+                canvas.height = videoTemp.videoHeight || 720;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(videoTemp, 0, 0, canvas.width, canvas.height);
+
+                cupomStream.getTracks().forEach(track => track.stop());
+
+                const imgSrc = canvas.toDataURL('image/jpeg');
                 cupons.push({ id: Date.now(), data: new Date().toLocaleDateString('pt-BR'), img: imgSrc });
                 localStorage.setItem('cc_cupons', JSON.stringify(cupons));
                 renderCupons();
 
-                const statusEl = document.getElementById('ocr-status');
                 statusEl.innerText = "⏳ Efetuando leitura inteligente do cupom (OCR)...";
 
                 Tesseract.recognize(imgSrc, 'por', { logger: m => console.log(m) })
@@ -659,8 +725,7 @@
                         console.error(err);
                         statusEl.innerText = "⚠️ Foto salva! Para melhor comparação automática, certifique-se de fotografar em local bem iluminado.";
                     });
-            };
-            reader.readAsDataURL(file);
+            }, 1000);
         }
 
         function processarTextoCupom(texto) {
