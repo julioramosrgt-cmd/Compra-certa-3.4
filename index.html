@@ -3,19 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Compra Certa 3.5</title>
+    <title>Compra Certa - Versão Completa</title>
     <link rel="manifest" href="./manifest.webmanifest">
-    <!-- Biblioteca Html5Qrcode para alta precisão -->
+    <!-- Biblioteca Html5Qrcode -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         :root {
             --bg-color: #121212;
             --card-bg: #1e1e1e;
             --primary: #00875a;
+            --primary-hover: #006644;
             --text: #ffffff;
             --text-sub: #aaaaaa;
             --danger: #de350b;
             --border: #333333;
+            --accent: #ffab00;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -23,6 +25,7 @@
             color: var(--text);
             margin: 0;
             padding: 0;
+            padding-bottom: 30px;
         }
         header {
             background-color: var(--card-bg);
@@ -32,7 +35,7 @@
         }
         header h1 {
             margin: 0;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             color: var(--primary);
         }
         nav {
@@ -45,12 +48,12 @@
         }
         .tab-btn {
             flex: 1;
-            padding: 12px 5px;
+            padding: 12px 2px;
             background: none;
             border: none;
             color: var(--text-sub);
             font-weight: bold;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             cursor: pointer;
             border-bottom: 3px solid transparent;
             text-align: center;
@@ -73,29 +76,47 @@
             margin-bottom: 15px;
             border: 1px solid var(--border);
         }
-        input[type="text"], input[type="number"] {
+        .card h2 {
+            font-size: 1rem;
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        input[type="text"], input[type="number"], select {
             width: 100%;
             padding: 10px;
-            margin: 8px 0;
+            margin: 6px 0 12px 0;
             border-radius: 4px;
             border: 1px solid var(--border);
             background-color: #2a2a2a;
             color: #fff;
             box-sizing: border-box;
+            font-size: 0.95rem;
         }
         .btn {
             background-color: var(--primary);
             color: white;
             border: none;
-            padding: 10px 15px;
+            padding: 12px 15px;
             border-radius: 4px;
             font-weight: bold;
             cursor: pointer;
             width: 100%;
-            margin-top: 8px;
+            margin-top: 5px;
             box-sizing: border-box;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
+        .btn:active { background-color: var(--primary-hover); }
+        .btn-secondary { background-color: #333333; color: #fff; }
         .btn-danger { background-color: var(--danger); }
+        .btn-accent { background-color: var(--accent); color: #000; }
         #reader-container {
             width: 100%;
             border-radius: 8px;
@@ -110,25 +131,61 @@
             margin-top: 8px;
             word-break: break-word;
         }
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .item-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .total-box {
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-align: right;
+            padding: 10px 0;
+            color: var(--primary);
+        }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Compra Certa 3.5</h1>
+        <h1>🛒 Compra Certa</h1>
     </header>
 
     <nav>
         <button class="tab-btn active" onclick="switchTab('tab-compra', event)">🛒 Compra</button>
         <button class="tab-btn" onclick="switchTab('tab-lista', event)">📋 Lista</button>
+        <button class="tab-btn" onclick="switchTab('tab-cupom', event)">🧾 Cupom</button>
+        <button class="tab-btn" onclick="switchTab('tab-divergencia', event)">⚖️ Divergências</button>
     </nav>
 
     <main>
+        <!-- TAB 1: COMPRA (CARRINHO E LEITOR) -->
         <section id="tab-compra" class="tab-content active">
             <div class="card">
-                <h2>📷 Escanear Código de Barras</h2>
-                <button class="btn" onclick="iniciarLeitor()">📷 Abrir Câmera de Leitura Alta Precisão</button>
-                <button class="btn btn-danger" id="btn-parar" style="display:none;" onclick="pararLeitor()">⏹️ Parar Câmera</button>
+                <h2>📷 Leitura de Código de Barras</h2>
+                
+                <!-- Método Foto (Precisão Máxima) -->
+                <label for="barcode-file-input" class="btn btn-accent" style="cursor:pointer; text-align:center;">
+                    📷 Capturar Foto do Código (Alta Precisão)
+                </label>
+                <input type="file" id="barcode-file-input" accept="image/*" capture="environment" style="display:none;" onchange="processarImagemCodigo(this)">
+
+                <!-- Método Câmara ao Vivo -->
+                <button class="btn btn-secondary" style="margin-top:8px;" onclick="iniciarLeitorAoVivo()">🎥 Abrir Câmera ao Vivo</button>
+                <button class="btn btn-danger" id="btn-parar-ao-vivo" style="display:none; margin-top:8px;" onclick="pararLeitorAoVivo()">⏹️ Parar Câmera</button>
                 
                 <div id="reader-container">
                     <div id="reader"></div>
@@ -137,21 +194,82 @@
             </div>
 
             <div class="card">
-                <h2>🛒 Registrar Item no Carrinho</h2>
-                <input type="text" id="prod-nome" placeholder="Nome do Produto / Especificação">
+                <h2>📝 Registrar Item no Carrinho</h2>
+                <label style="font-size:0.8rem; color:var(--text-sub);">Especificação / Produto:</label>
+                <input type="text" id="prod-nome" placeholder="Ex: Leite Integral 1L">
+                
                 <div style="display:flex; gap:10px;">
-                    <input type="number" id="prod-qtd" placeholder="Qtd" value="1" min="1">
-                    <input type="number" id="prod-preco" placeholder="Preço (R$)" step="0.01">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; color:var(--text-sub);">Qtd:</label>
+                        <input type="number" id="prod-qtd" value="1" min="1">
+                    </div>
+                    <div style="flex:2;">
+                        <label style="font-size:0.8rem; color:var(--text-sub);">Preço Unitário (R$):</label>
+                        <input type="number" id="prod-preco" placeholder="0.00" step="0.01">
+                    </div>
                 </div>
+                
                 <button class="btn" onclick="addProdutoCarrinho()">+ Adicionar ao Carrinho</button>
+            </div>
+
+            <div class="card">
+                <h2>🛒 Itens no Carrinho</h2>
+                <div id="carrinho-list">
+                    <p style="color:#888; font-size:0.85rem;">Nenhum item adicionado ao carrinho.</p>
+                </div>
+                <div class="total-box" id="carrinho-total">Total: R$ 0,00</div>
+                <button class="btn btn-danger" onclick="limparCarrinho()">🗑️ Limpar Carrinho</button>
             </div>
         </section>
 
+        <!-- TAB 2: LISTA PLANEJADA -->
         <section id="tab-lista" class="tab-content">
             <div class="card">
-                <h2>📋 Minha Lista de Compras</h2>
-                <input type="text" id="item-lista-nome" placeholder="O que precisa comprar?">
+                <h2>📋 Adicionar à Lista Planejada</h2>
+                <input type="text" id="item-lista-nome" placeholder="Nome do item a comprar...">
                 <button class="btn" onclick="adicionarItemLista()">+ Adicionar à Lista</button>
+            </div>
+
+            <div class="card">
+                <h2>📌 Itens Planejados</h2>
+                <div id="lista-planejada-container">
+                    <p style="color:#888; font-size:0.85rem;">Sua lista está vazia.</p>
+                </div>
+                <button class="btn btn-danger" style="margin-top:10px;" onclick="limparListaPlanejada()">🗑️ Limpar Lista</button>
+            </div>
+        </section>
+
+        <!-- TAB 3: CUPOM FISCAL -->
+        <section id="tab-cupom" class="tab-content">
+            <div class="card">
+                <h2>🧾 Registrar Cupom Fiscal</h2>
+                <p style="font-size:0.85rem; color:var(--text-sub);">Fotografe o cupom para guardar comprovantes e conferir divergências.</p>
+                
+                <input type="file" id="cupom-img-input" accept="image/*" capture="environment" style="display:none;" onchange="registrarFotoCupom(this)">
+                <button class="btn" onclick="document.getElementById('cupom-img-input').click()">📷 Tirar Foto do Cupom</button>
+            </div>
+
+            <div class="card">
+                <h2>📸 Cupons Salvos</h2>
+                <div id="cupons-container">
+                    <p style="color:#888; font-size:0.85rem;">Nenhum cupom gravado.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: CONFERÊNCIA DE DIVERGÊNCIAS -->
+        <section id="tab-divergencia" class="tab-content">
+            <div class="card">
+                <h2>⚖️ Comparar Carrinho x Cupom</h2>
+                <p style="font-size:0.85rem; color:var(--text-sub);">Verifique se os valores cobrados no caixa conferem com os preços registrados nas gôndolas.</p>
+                <button class="btn btn-accent" onclick="conferirDivergencias()">🔍 Conferir Divergências</button>
+            </div>
+
+            <div class="card">
+                <h2>Resultado da Comparação</h2>
+                <div id="divergencias-resultado">
+                    <p style="color:#888; font-size:0.85rem;">Clique no botão acima para realizar a verificação.</p>
+                </div>
             </div>
         </section>
     </main>
@@ -160,22 +278,30 @@
         let html5QrCode = null;
         let lastDetectedCode = "";
         let detectionCount = 0;
+        let carrinho = JSON.parse(localStorage.getItem('cc_carrinho')) || [];
+        let listaPlanejada = JSON.parse(localStorage.getItem('cc_lista')) || [];
+        let cupons = JSON.parse(localStorage.getItem('cc_cupons')) || [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            renderCarrinho();
+            renderListaPlanejada();
+            renderCupons();
+        });
 
         function switchTab(tabId, evt) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             if(evt) evt.currentTarget.classList.add('active');
-            if(tabId !== 'tab-compra') pararLeitor();
+            if(tabId !== 'tab-compra') pararLeitorAoVivo();
         }
 
-        // CONSULTA DE PRODUTOS NAS BASES PÚBLICAS (OPEN FOOD FACTS + MERCADO BRASIL)
+        // --- BUSCA DE PRODUTOS ---
         async function buscarProdutoPorCodigo(codigo) {
             const statusEl = document.getElementById('barcode-status');
-            statusEl.innerText = `🔍 Código EAN validado: ${codigo}. Buscando produto...`;
+            statusEl.innerText = `🔍 Código EAN: ${codigo} — Consultando bases públicas...`;
 
             try {
-                // 1. Consulta à base Open Food Facts Brasil
                 let res = await fetch(`https://br.openfoodfacts.org/api/v2/product/${codigo}.json`);
                 let data = await res.json();
 
@@ -184,50 +310,65 @@
                     const nome = p.product_name_pt || p.product_name || p.abbreviated_product_name || "";
                     const marca = p.brands ? ` - ${p.brands}` : "";
                     const qtd = p.quantity ? ` (${p.quantity})` : "";
-                    
+
                     if (nome.trim() !== "") {
                         const descricao = `${nome}${marca}${qtd}`.trim();
                         document.getElementById('prod-nome').value = descricao;
-                        statusEl.innerText = `✅ Produto Encontrado: ${descricao}`;
+                        statusEl.innerText = `✅ Encontrado: ${descricao}`;
                         return;
                     }
                 }
 
-                // 2. Consulta de contingência para produtos nacionais
                 res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${codigo}.json`);
                 data = await res.json();
 
                 if (data.status === 1 && data.product && data.product.product_name) {
                     const descricao = data.product.product_name;
                     document.getElementById('prod-nome').value = descricao;
-                    statusEl.innerText = `✅ Produto Encontrado: ${descricao}`;
+                    statusEl.innerText = `✅ Encontrado: ${descricao}`;
                     return;
                 }
 
-                // Não encontrado na base cadastrada
                 document.getElementById('prod-nome').value = "";
-                statusEl.innerText = `⚠️ Código ${codigo} lido com sucesso! Produto sem cadastro na base pública. Insira o nome manualmente.`;
+                statusEl.innerText = `⚠️ Código ${codigo} lido, mas produto sem cadastro na base pública. Insira o nome manualmente.`;
 
             } catch (err) {
-                console.error("Erro na busca:", err);
+                console.error(err);
                 document.getElementById('prod-nome').value = "";
-                statusEl.innerText = `⚠️ Código ${codigo} lido com sucesso! Insira a especificação manualmente.`;
+                statusEl.innerText = `⚠️ Código ${codigo} lido com sucesso! Insira a descrição manualmente.`;
             }
         }
 
-        // INICIAR CÂMERA DE LEITURA
-        function iniciarLeitor() {
+        // --- LEITOR VIA FOTO (PRESCISÃO) ---
+        function processarImagemCodigo(input) {
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            const statusEl = document.getElementById('barcode-status');
+            statusEl.innerText = "⏳ Processando imagem da foto...";
+
+            if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+
+            html5QrCode.scanFile(file, true)
+                .then(decodedText => {
+                    statusEl.innerText = `✅ Código Lido: ${decodedText}`;
+                    buscarProdutoPorCodigo(decodedText);
+                })
+                .catch(err => {
+                    statusEl.innerText = "❌ Não foi possível ler o código na foto. Certifique-se de focar bem o código.";
+                });
+        }
+
+        // --- LEITOR CÂMARA AO VIVO ---
+        function iniciarLeitorAoVivo() {
             document.getElementById('reader-container').style.display = 'block';
-            document.getElementById('btn-parar').style.display = 'block';
+            document.getElementById('btn-parar-ao-vivo').style.display = 'block';
             const statusEl = document.getElementById('barcode-status');
             statusEl.innerText = "Aponte a câmera para o código de barras...";
 
             lastDetectedCode = "";
             detectionCount = 0;
 
-            if (!html5QrCode) {
-                html5QrCode = new Html5Qrcode("reader");
-            }
+            if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
 
             const config = {
                 fps: 15,
@@ -244,7 +385,6 @@
                 { facingMode: "environment" },
                 config,
                 (decodedText) => {
-                    // Validação de segurança: Exige 3 confirmações idênticas seguidas antes de aceitar
                     if (decodedText === lastDetectedCode) {
                         detectionCount++;
                     } else {
@@ -253,31 +393,188 @@
                     }
 
                     if (detectionCount >= 3) {
-                        pararLeitor();
+                        pararLeitorAoVivo();
                         buscarProdutoPorCodigo(decodedText);
                     } else {
-                        statusEl.innerText = `⏳ Lendo código: ${decodedText} (focando...)`;
+                        statusEl.innerText = `⏳ Confirmando código: ${decodedText}...`;
                     }
                 },
-                (errorMessage) => {
-                    // Ignora erros de enquadramento enquanto procura
-                }
+                (err) => {}
             ).catch(err => {
-                alert("Erro ao abrir a câmera: " + err);
-                pararLeitor();
+                alert("Erro ao abrir câmera: " + err);
+                pararLeitorAoVivo();
             });
         }
 
-        function pararLeitor() {
+        function pararLeitorAoVivo() {
             if (html5QrCode && html5QrCode.isScanning) {
                 html5QrCode.stop().then(() => {
                     document.getElementById('reader-container').style.display = 'none';
-                    document.getElementById('btn-parar').style.display = 'none';
+                    document.getElementById('btn-parar-ao-vivo').style.display = 'none';
                 }).catch(err => console.error(err));
             } else {
                 document.getElementById('reader-container').style.display = 'none';
-                document.getElementById('btn-parar').style.display = 'none';
+                document.getElementById('btn-parar-ao-vivo').style.display = 'none';
             }
+        }
+
+        // --- CARRINHO ---
+        function addProdutoCarrinho() {
+            const nome = document.getElementById('prod-nome').value.trim();
+            const qtd = parseFloat(document.getElementById('prod-qtd').value) || 1;
+            const preco = parseFloat(document.getElementById('prod-preco').value) || 0;
+
+            if (!nome) { alert('Informe a especificação/nome do produto!'); return; }
+
+            carrinho.push({ id: Date.now(), nome, qtd, preco });
+            localStorage.setItem('cc_carrinho', JSON.stringify(carrinho));
+            
+            document.getElementById('prod-nome').value = '';
+            document.getElementById('prod-preco').value = '';
+            document.getElementById('prod-qtd').value = '1';
+            
+            renderCarrinho();
+        }
+
+        function removerItemCarrinho(id) {
+            carrinho = carrinho.filter(item => item.id !== id);
+            localStorage.setItem('cc_carrinho', JSON.stringify(carrinho));
+            renderCarrinho();
+        }
+
+        function limparCarrinho() {
+            if (confirm("Deseja realmente limpar todo o carrinho?")) {
+                carrinho = [];
+                localStorage.removeItem('cc_carrinho');
+                renderCarrinho();
+            }
+        }
+
+        function renderCarrinho() {
+            const container = document.getElementById('carrinho-list');
+            const totalEl = document.getElementById('carrinho-total');
+
+            if (carrinho.length === 0) {
+                container.innerHTML = '<p style="color:#888; font-size:0.85rem;">Nenhum item no carrinho.</p>';
+                totalEl.innerText = 'Total: R$ 0,00';
+                return;
+            }
+
+            let total = 0;
+            container.innerHTML = carrinho.map(item => {
+                const subtotal = item.qtd * item.preco;
+                total += subtotal;
+                return `
+                    <div class="item-row">
+                        <div>
+                            <strong>${item.nome}</strong><br>
+                            <small style="color:var(--text-sub);">${item.qtd}x R$ ${item.preco.toFixed(2)}</small>
+                        </div>
+                        <div class="item-actions">
+                            <span style="font-weight:bold;">R$ ${subtotal.toFixed(2)}</span>
+                            <button class="action-btn" onclick="removerItemCarrinho(${item.id})">❌</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            totalEl.innerText = `Total: R$ ${total.toFixed(2)}`;
+        }
+
+        // --- LISTA PLANEJADA ---
+        function adicionarItemLista() {
+            const nome = document.getElementById('item-lista-nome').value.trim();
+            if (!nome) return;
+            listaPlanejada.push({ id: Date.now(), nome, comprado: false });
+            localStorage.setItem('cc_lista', JSON.stringify(listaPlanejada));
+            document.getElementById('item-lista-nome').value = '';
+            renderListaPlanejada();
+        }
+
+        function toggleItemLista(id) {
+            listaPlanejada = listaPlanejada.map(i => i.id === id ? { ...i, comprado: !i.comprado } : i);
+            localStorage.setItem('cc_lista', JSON.stringify(listaPlanejada));
+            renderListaPlanejada();
+        }
+
+        function removerItemLista(id) {
+            listaPlanejada = listaPlanejada.filter(i => i.id !== id);
+            localStorage.setItem('cc_lista', JSON.stringify(listaPlanejada));
+            renderListaPlanejada();
+        }
+
+        function limparListaPlanejada() {
+            if (confirm("Limpar toda a lista planejada?")) {
+                listaPlanejada = [];
+                localStorage.removeItem('cc_lista');
+                renderListaPlanejada();
+            }
+        }
+
+        function renderListaPlanejada() {
+            const container = document.getElementById('lista-planejada-container');
+            if (listaPlanejada.length === 0) {
+                container.innerHTML = '<p style="color:#888; font-size:0.85rem;">Sua lista está vazia.</p>';
+                return;
+            }
+            container.innerHTML = listaPlanejada.map(i => `
+                <div class="item-row">
+                    <span style="${i.comprado ? 'text-decoration: line-through; color: #888;' : ''}" onclick="toggleItemLista(${i.id})">
+                        ${i.comprado ? '✅' : '📌'} ${i.nome}
+                    </span>
+                    <button class="action-btn" onclick="removerItemLista(${i.id})">❌</button>
+                </div>
+            `).join('');
+        }
+
+        // --- CUPOM FISCAL ---
+        function registrarFotoCupom(input) {
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                cupons.push({ id: Date.now(), data: new Date().toLocaleDateString('pt-BR'), img: e.target.result });
+                localStorage.setItem('cc_cupons', JSON.stringify(cupons));
+                renderCupons();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removerCupom(id) {
+            cupons = cupons.filter(c => c.id !== id);
+            localStorage.setItem('cc_cupons', JSON.stringify(cupons));
+            renderCupons();
+        }
+
+        function renderCupons() {
+            const container = document.getElementById('cupons-container');
+            if (cupons.length === 0) {
+                container.innerHTML = '<p style="color:#888; font-size:0.85rem;">Nenhum cupom gravado.</p>';
+                return;
+            }
+            container.innerHTML = cupons.map(c => `
+                <div class="item-row" style="flex-direction:column; align-items:flex-start; gap:8px;">
+                    <div style="display:flex; justify-content:space-between; width:100%;">
+                        <strong>🧾 Cupom de ${c.data}</strong>
+                        <button class="action-btn" onclick="removerCupom(${c.id})">❌</button>
+                    </div>
+                    <img src="${c.img}" style="width:100%; max-height:200px; object-fit:cover; border-radius:4px;">
+                </div>
+            `).join('');
+        }
+
+        // --- DIVERGÊNCIAS ---
+        function conferirDivergencias() {
+            const resultado = document.getElementById('divergencias-resultado');
+            if (carrinho.length === 0) {
+                resultado.innerHTML = '<p style="color:#ffab00; font-size:0.85rem;">Adicione itens ao carrinho para realizar a conferência.</p>';
+                return;
+            }
+            resultado.innerHTML = `
+                <p style="color:#57d9a3; font-size:0.85rem;">✅ Carrinho analisado (${carrinho.length} itens registrados).</p>
+                <p style="font-size:0.8rem; color:var(--text-sub);">Compare os totais das gôndolas registrados no carrinho com o valor impresso na nota fiscal capturada.</p>
+            `;
         }
     </script>
 </body>
