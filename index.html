@@ -393,8 +393,8 @@
                 });
         }
 
-        // --- LEITOR CÂMARA AO VIVO (DIRETO CÂMARA TRASEIRA) ---
-        function iniciarLeitorAoVivo() {
+        // --- LEITOR CÂMARA AO VIVO (CORRIGIDO PARA ABRIR SEMPRE CÂMARA TRASEIRA) ---
+        async function iniciarLeitorAoVivo() {
             document.getElementById('reader-container').style.display = 'block';
             document.getElementById('btn-parar-ao-vivo').style.display = 'block';
             const statusEl = document.getElementById('barcode-status');
@@ -416,36 +416,51 @@
                 ]
             };
 
-            // facingMode exact environment garante o uso direto da câmera traseira
-            html5QrCode.start(
-                { facingMode: { exact: "environment" } },
-                config,
-                (decodedText) => {
-                    if (decodedText === lastDetectedCode) {
-                        detectionCount++;
-                    } else {
-                        lastDetectedCode = decodedText;
-                        detectionCount = 1;
-                    }
+            const onScanSuccess = (decodedText) => {
+                if (decodedText === lastDetectedCode) {
+                    detectionCount++;
+                } else {
+                    lastDetectedCode = decodedText;
+                    detectionCount = 1;
+                }
 
-                    if (detectionCount >= 3) {
-                        pararLeitorAoVivo();
-                        buscarProdutoPorCodigo(decodedText);
-                    } else {
-                        statusEl.innerText = `⏳ Confirmando código: ${decodedText}...`;
-                    }
-                },
-                (err) => {}
-            ).catch(err => {
-                // Fallback para caso o dispositivo exija sintaxe genérica para câmera traseira
-                html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+                if (detectionCount >= 3) {
                     pararLeitorAoVivo();
                     buscarProdutoPorCodigo(decodedText);
-                }).catch(e => {
-                    alert("Erro ao abrir a câmera traseira: " + e);
-                    pararLeitorAoVivo();
-                });
-            });
+                } else {
+                    statusEl.innerText = `⏳ Confirmando código: ${decodedText}...`;
+                }
+            };
+
+            try {
+                // Tenta selecionar diretamente a câmera com rótulo traseiro/environment através da lista de câmeras
+                const devices = await Html5Qrcode.getCameras();
+                let backCameraId = null;
+
+                if (devices && devices.length > 0) {
+                    const backCam = devices.find(d => 
+                        d.label.toLowerCase().includes('back') || 
+                        d.label.toLowerCase().includes('traseira') || 
+                        d.label.toLowerCase().includes('rear') ||
+                        d.label.toLowerCase().includes('environment')
+                    );
+                    if (backCam) backCameraId = backCam.id;
+                    else backCameraId = devices[devices.length - 1].id; // Geralmente a última da lista é a câmera traseira principal
+                }
+
+                if (backCameraId) {
+                    await html5QrCode.start(backCameraId, config, onScanSuccess, (err) => {});
+                } else {
+                    await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {});
+                }
+            } catch (err) {
+                // Fallback de segurança se a seleção por ID falhar
+                html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {})
+                    .catch(e => {
+                        alert("Erro ao abrir a câmera traseira: " + e);
+                        pararLeitorAoVivo();
+                    });
+            }
         }
 
         function pararLeitorAoVivo() {
@@ -658,7 +673,6 @@
 
             linhas.forEach(linha => {
                 const l = linha.toUpperCase().trim();
-                // Identifica valores numéricos com decimais na linha
                 const matches = l.match(/(\d+[\.,]\d{2})/g);
                 const matchQtd = l.match(/(\d+)\s*X\s*(\d+[\.,]\d{2})/);
                 const ehDesconto = l.includes("DESC") || l.includes("OFERTA") || l.includes("PROMO") || l.includes("-");
@@ -670,7 +684,6 @@
                         qtd = parseFloat(matchQtd[1]);
                     }
 
-                    // Remove números do nome do produto para isolar o texto
                     const nomeStr = l.replace(/(\d+[\.,]\d{2})/g, '').replace(/(\d+)\s*X/, '').replace(/[^A-Z\s]/g, '').trim();
 
                     if (nomeStr.length > 2) {
@@ -722,7 +735,6 @@
             let html = '<div style="display:flex; flex-direction:column; gap:10px;">';
 
             carrinho.forEach(itemCar => {
-                // Procura correspondência do nome no texto do cupom
                 const itemCupom = itensCupomLidos.find(ic => 
                     ic.nome.includes(itemCar.nome.toUpperCase()) || itemCar.nome.toUpperCase().includes(ic.nome)
                 );
