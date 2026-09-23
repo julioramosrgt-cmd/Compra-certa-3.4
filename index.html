@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Compra Certa - Versão Completa</title>
+    <title>Compra Certa - Completo</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <!-- Biblioteca Html5Qrcode -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- OCR Tesseract.js em Português para Leitura de Cupons -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
             --bg-color: #121212;
@@ -45,18 +47,21 @@
             position: sticky;
             top: 0;
             z-index: 100;
+            overflow-x: auto;
         }
         .tab-btn {
             flex: 1;
+            min-width: 75px;
             padding: 12px 2px;
             background: none;
             border: none;
             color: var(--text-sub);
             font-weight: bold;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             cursor: pointer;
             border-bottom: 3px solid transparent;
             text-align: center;
+            white-space: nowrap;
         }
         .tab-btn.active {
             color: var(--primary);
@@ -85,7 +90,7 @@
             align-items: center;
             gap: 8px;
         }
-        input[type="text"], input[type="number"], select {
+        input[type="text"], input[type="number"], input[type="date"], select {
             width: 100%;
             padding: 10px;
             margin: 6px 0 12px 0;
@@ -156,6 +161,15 @@
             padding: 10px 0;
             color: var(--primary);
         }
+        .badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .badge-danger { background-color: var(--danger); color: #fff; }
+        .badge-warning { background-color: var(--accent); color: #000; }
+        .badge-success { background-color: var(--primary); color: #fff; }
     </style>
 </head>
 <body>
@@ -167,6 +181,7 @@
     <nav>
         <button class="tab-btn active" onclick="switchTab('tab-compra', event)">🛒 Compra</button>
         <button class="tab-btn" onclick="switchTab('tab-lista', event)">📋 Lista</button>
+        <button class="tab-btn" onclick="switchTab('tab-validade', event)">📅 Validades</button>
         <button class="tab-btn" onclick="switchTab('tab-cupom', event)">🧾 Cupom</button>
         <button class="tab-btn" onclick="switchTab('tab-divergencia', event)">⚖️ Divergências</button>
     </nav>
@@ -177,14 +192,12 @@
             <div class="card">
                 <h2>📷 Leitura de Código de Barras</h2>
                 
-                <!-- Método Foto (Precisão Máxima) -->
                 <label for="barcode-file-input" class="btn btn-accent" style="cursor:pointer; text-align:center;">
                     📷 Capturar Foto do Código (Alta Precisão)
                 </label>
                 <input type="file" id="barcode-file-input" accept="image/*" capture="environment" style="display:none;" onchange="processarImagemCodigo(this)">
 
-                <!-- Método Câmara ao Vivo -->
-                <button class="btn btn-secondary" style="margin-top:8px;" onclick="iniciarLeitorAoVivo()">🎥 Abrir Câmera ao Vivo</button>
+                <button class="btn btn-secondary" style="margin-top:8px;" onclick="iniciarLeitorAoVivo()">🎥 Abrir Câmera Traseira ao Vivo</button>
                 <button class="btn btn-danger" id="btn-parar-ao-vivo" style="display:none; margin-top:8px;" onclick="pararLeitorAoVivo()">⏹️ Parar Câmera</button>
                 
                 <div id="reader-container">
@@ -239,14 +252,33 @@
             </div>
         </section>
 
-        <!-- TAB 3: CUPOM FISCAL -->
+        <!-- TAB 3: CONTROLE DE VALIDADE -->
+        <section id="tab-validade" class="tab-content">
+            <div class="card">
+                <h2>📅 Cadastrar Validade de Produto</h2>
+                <input type="text" id="val-prod-nome" placeholder="Nome do Produto (Ex: Iogurte)">
+                <label style="font-size:0.8rem; color:var(--text-sub);">Data de Vencimento:</label>
+                <input type="date" id="val-prod-data">
+                <button class="btn" onclick="cadastrarValidade()">+ Cadastrar Validade</button>
+            </div>
+
+            <div class="card">
+                <h2>🚨 Controle de Produtos / Prazos</h2>
+                <div id="validades-container">
+                    <p style="color:#888; font-size:0.85rem;">Nenhum produto em controle de validade.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: CUPOM FISCAL -->
         <section id="tab-cupom" class="tab-content">
             <div class="card">
                 <h2>🧾 Registrar Cupom Fiscal</h2>
-                <p style="font-size:0.85rem; color:var(--text-sub);">Fotografe o cupom para guardar comprovantes e conferir divergências.</p>
+                <p style="font-size:0.85rem; color:var(--text-sub);">Fotografe o cupom para realizar a leitura OCR automática dos itens, quantidades e descontos.</p>
                 
                 <input type="file" id="cupom-img-input" accept="image/*" capture="environment" style="display:none;" onchange="registrarFotoCupom(this)">
                 <button class="btn" onclick="document.getElementById('cupom-img-input').click()">📷 Tirar Foto do Cupom</button>
+                <p id="ocr-status" class="status-msg"></p>
             </div>
 
             <div class="card">
@@ -257,18 +289,18 @@
             </div>
         </section>
 
-        <!-- TAB 4: CONFERÊNCIA DE DIVERGÊNCIAS -->
+        <!-- TAB 5: CONFERÊNCIA DE DIVERGÊNCIAS -->
         <section id="tab-divergencia" class="tab-content">
             <div class="card">
-                <h2>⚖️ Comparar Carrinho x Cupom</h2>
-                <p style="font-size:0.85rem; color:var(--text-sub);">Verifique se os valores cobrados no caixa conferem com os preços registrados nas gôndolas.</p>
-                <button class="btn btn-accent" onclick="conferirDivergencias()">🔍 Conferir Divergências</button>
+                <h2>⚖️ Comparação: Carrinho x Cupom Fiscal</h2>
+                <p style="font-size:0.85rem; color:var(--text-sub);">Cruza os valores e quantidades inseridos por você com a leitura real do cupom fiscal da compra.</p>
+                <button class="btn btn-accent" onclick="conferirDivergencias()">🔍 Executar Comparação de Preços e Quantidades</button>
             </div>
 
             <div class="card">
-                <h2>Resultado da Comparação</h2>
+                <h2>Relatório de Divergências e Descontos</h2>
                 <div id="divergencias-resultado">
-                    <p style="color:#888; font-size:0.85rem;">Clique no botão acima para realizar a verificação.</p>
+                    <p style="color:#888; font-size:0.85rem;">Clique no botão acima para iniciar a conferência.</p>
                 </div>
             </div>
         </section>
@@ -281,11 +313,14 @@
         let carrinho = JSON.parse(localStorage.getItem('cc_carrinho')) || [];
         let listaPlanejada = JSON.parse(localStorage.getItem('cc_lista')) || [];
         let cupons = JSON.parse(localStorage.getItem('cc_cupons')) || [];
+        let validades = JSON.parse(localStorage.getItem('cc_validades')) || [];
+        let itensCupomLidos = JSON.parse(localStorage.getItem('cc_cupom_ocr')) || [];
 
         document.addEventListener("DOMContentLoaded", () => {
             renderCarrinho();
             renderListaPlanejada();
             renderCupons();
+            renderValidades();
         });
 
         function switchTab(tabId, evt) {
@@ -339,7 +374,7 @@
             }
         }
 
-        // --- LEITOR VIA FOTO (PRESCISÃO) ---
+        // --- LEITOR VIA FOTO ---
         function processarImagemCodigo(input) {
             if (!input.files || input.files.length === 0) return;
             const file = input.files[0];
@@ -358,12 +393,12 @@
                 });
         }
 
-        // --- LEITOR CÂMARA AO VIVO ---
+        // --- LEITOR CÂMARA AO VIVO (DIRETO CÂMARA TRASEIRA) ---
         function iniciarLeitorAoVivo() {
             document.getElementById('reader-container').style.display = 'block';
             document.getElementById('btn-parar-ao-vivo').style.display = 'block';
             const statusEl = document.getElementById('barcode-status');
-            statusEl.innerText = "Aponte a câmera para o código de barras...";
+            statusEl.innerText = "Aponte a câmera traseira para o código de barras...";
 
             lastDetectedCode = "";
             detectionCount = 0;
@@ -381,8 +416,9 @@
                 ]
             };
 
+            // facingMode exact environment garante o uso direto da câmera traseira
             html5QrCode.start(
-                { facingMode: "environment" },
+                { facingMode: { exact: "environment" } },
                 config,
                 (decodedText) => {
                     if (decodedText === lastDetectedCode) {
@@ -401,8 +437,14 @@
                 },
                 (err) => {}
             ).catch(err => {
-                alert("Erro ao abrir câmera: " + err);
-                pararLeitorAoVivo();
+                // Fallback para caso o dispositivo exija sintaxe genérica para câmera traseira
+                html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+                    pararLeitorAoVivo();
+                    buscarProdutoPorCodigo(decodedText);
+                }).catch(e => {
+                    alert("Erro ao abrir a câmera traseira: " + e);
+                    pararLeitorAoVivo();
+                });
             });
         }
 
@@ -527,18 +569,122 @@
             `).join('');
         }
 
-        // --- CUPOM FISCAL ---
+        // --- CONTROLE DE VALIDADE ---
+        function cadastrarValidade() {
+            const nome = document.getElementById('val-prod-nome').value.trim();
+            const dataVal = document.getElementById('val-prod-data').value;
+            if (!nome || !dataVal) { alert("Preencha o nome do produto e a data de validade!"); return; }
+
+            validades.push({ id: Date.now(), nome, data: dataVal });
+            localStorage.setItem('cc_validades', JSON.stringify(validades));
+            document.getElementById('val-prod-nome').value = '';
+            document.getElementById('val-prod-data').value = '';
+            renderValidades();
+        }
+
+        function removerValidade(id) {
+            validades = validades.filter(v => v.id !== id);
+            localStorage.setItem('cc_validades', JSON.stringify(validades));
+            renderValidades();
+        }
+
+        function renderValidades() {
+            const container = document.getElementById('validades-container');
+            if (validades.length === 0) {
+                container.innerHTML = '<p style="color:#888; font-size:0.85rem;">Nenhum produto em controle de validade.</p>';
+                return;
+            }
+
+            const hoje = new Date();
+            hoje.setHours(0,0,0,0);
+
+            container.innerHTML = validades.map(v => {
+                const part = v.data.split('-');
+                const dtVal = new Date(part[0], part[1]-1, part[2]);
+                const diffDias = Math.ceil((dtVal - hoje) / (1000 * 60 * 60 * 24));
+
+                let badge = '<span class="badge badge-success">OK</span>';
+                if (diffDias < 0) {
+                    badge = '<span class="badge badge-danger">VENCIDO</span>';
+                } else if (diffDias <= 7) {
+                    badge = '<span class="badge badge-warning">VENCE EM BREVE</span>';
+                }
+
+                return `
+                    <div class="item-row">
+                        <div>
+                            <strong>${v.nome}</strong> ${badge}<br>
+                            <small style="color:var(--text-sub);">Validade: ${part[2]}/${part[1]}/${part[0]} (${diffDias < 0 ? 'Vencido há ' + Math.abs(diffDias) + ' dias' : diffDias + ' dias restantes'})</small>
+                        </div>
+                        <button class="action-btn" onclick="removerValidade(${v.id})">❌</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- CUPOM FISCAL + LEITURA OCR ---
         function registrarFotoCupom(input) {
             if (!input.files || input.files.length === 0) return;
             const file = input.files[0];
             const reader = new FileReader();
 
             reader.onload = function(e) {
-                cupons.push({ id: Date.now(), data: new Date().toLocaleDateString('pt-BR'), img: e.target.result });
+                const imgSrc = e.target.result;
+                cupons.push({ id: Date.now(), data: new Date().toLocaleDateString('pt-BR'), img: imgSrc });
                 localStorage.setItem('cc_cupons', JSON.stringify(cupons));
                 renderCupons();
+
+                // Processar OCR
+                const statusEl = document.getElementById('ocr-status');
+                statusEl.innerText = "⏳ Efetuando leitura inteligente do cupom (OCR)...";
+
+                Tesseract.recognize(imgSrc, 'por', { logger: m => console.log(m) })
+                    .then(({ data: { text } }) => {
+                        statusEl.innerText = "✅ Leitura do cupom concluída com sucesso!";
+                        processarTextoCupom(text);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        statusEl.innerText = "⚠️ Foto salva! Para melhor comparação automática, certifique-se de fotografar em local bem iluminado.";
+                    });
             };
             reader.readAsDataURL(file);
+        }
+
+        // Extração de Produtos, Preços, Qtds e Descontos do texto do Cupom
+        function processarTextoCupom(texto) {
+            const linhas = texto.split('\n');
+            itensCupomLidos = [];
+
+            linhas.forEach(linha => {
+                const l = linha.toUpperCase().trim();
+                // Identifica valores numéricos com decimais na linha
+                const matches = l.match(/(\d+[\.,]\d{2})/g);
+                const matchQtd = l.match(/(\d+)\s*X\s*(\d+[\.,]\d{2})/);
+                const ehDesconto = l.includes("DESC") || l.includes("OFERTA") || l.includes("PROMO") || l.includes("-");
+
+                if (matches && matches.length > 0) {
+                    const precoFinal = parseFloat(matches[matches.length - 1].replace(',', '.'));
+                    let qtd = 1;
+                    if (matchQtd) {
+                        qtd = parseFloat(matchQtd[1]);
+                    }
+
+                    // Remove números do nome do produto para isolar o texto
+                    const nomeStr = l.replace(/(\d+[\.,]\d{2})/g, '').replace(/(\d+)\s*X/, '').replace(/[^A-Z\s]/g, '').trim();
+
+                    if (nomeStr.length > 2) {
+                        itensCupomLidos.push({
+                            nome: nomeStr,
+                            qtd: qtd,
+                            preco: precoFinal,
+                            desconto: ehDesconto
+                        });
+                    }
+                }
+            });
+
+            localStorage.setItem('cc_cupom_ocr', JSON.stringify(itensCupomLidos));
         }
 
         function removerCupom(id) {
@@ -564,17 +710,62 @@
             `).join('');
         }
 
-        // --- DIVERGÊNCIAS ---
+        // --- CONFERÊNCIA DE DIVERGÊNCIAS E DESCONTOS ---
         function conferirDivergencias() {
             const resultado = document.getElementById('divergencias-resultado');
+
             if (carrinho.length === 0) {
-                resultado.innerHTML = '<p style="color:#ffab00; font-size:0.85rem;">Adicione itens ao carrinho para realizar a conferência.</p>';
+                resultado.innerHTML = '<p style="color:#ffab00; font-size:0.85rem;">Adicione itens ao seu carrinho primeiro para efetuar a comparação.</p>';
                 return;
             }
-            resultado.innerHTML = `
-                <p style="color:#57d9a3; font-size:0.85rem;">✅ Carrinho analisado (${carrinho.length} itens registrados).</p>
-                <p style="font-size:0.8rem; color:var(--text-sub);">Compare os totais das gôndolas registrados no carrinho com o valor impresso na nota fiscal capturada.</p>
-            `;
+
+            let html = '<div style="display:flex; flex-direction:column; gap:10px;">';
+
+            carrinho.forEach(itemCar => {
+                // Procura correspondência do nome no texto do cupom
+                const itemCupom = itensCupomLidos.find(ic => 
+                    ic.nome.includes(itemCar.nome.toUpperCase()) || itemCar.nome.toUpperCase().includes(ic.nome)
+                );
+
+                if (itemCupom) {
+                    const diffPreco = itemCupom.preco - itemCar.preco;
+                    const diffQtd = itemCupom.qtd - itemCar.qtd;
+
+                    let statusBadge = '<span class="badge badge-success">✓ PREÇO E QTD OK</span>';
+                    let detalhes = '';
+
+                    if (Math.abs(diffPreco) > 0.05) {
+                        if (diffPreco > 0) {
+                            statusBadge = '<span class="badge badge-danger">⚠️ COBRADO A MAIS</span>';
+                            detalhes += `<br><span style="color:var(--danger);">Gôndola: R$ ${itemCar.preco.toFixed(2)} | Cupom: R$ ${itemCupom.preco.toFixed(2)} (+R$ ${diffPreco.toFixed(2)})</span>`;
+                        } else {
+                            statusBadge = '<span class="badge badge-warning">🏷️ DESCONTO / OFERTA</span>';
+                            detalhes += `<br><span style="color:var(--accent);">Gôndola: R$ ${itemCar.preco.toFixed(2)} | Cupom: R$ ${itemCupom.preco.toFixed(2)} (Economia de R$ ${Math.abs(diffPreco).toFixed(2)})</span>`;
+                        }
+                    }
+
+                    if (diffQtd !== 0) {
+                        detalhes += `<br><span style="color:#ffab00;">Qtd no Carrinho: ${itemCar.qtd} | Qtd no Cupom: ${itemCupom.qtd}</span>`;
+                    }
+
+                    html += `
+                        <div style="padding:10px; background:#2a2a2a; border-radius:6px; border-left:4px solid ${diffPreco > 0.05 ? 'var(--danger)' : 'var(--primary)'};">
+                            <strong>${itemCar.nome}</strong> ${statusBadge}
+                            ${detalhes}
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div style="padding:10px; background:#2a2a2a; border-radius:6px; border-left:4px solid var(--primary);">
+                            <strong>${itemCar.nome}</strong> <span class="badge badge-success">REGISTRADO NO CARRINHO</span><br>
+                            <small style="color:var(--text-sub);">${itemCar.qtd}x R$ ${itemCar.preco.toFixed(2)} (Aguardando leitura completa do cupom)</small>
+                        </div>
+                    `;
+                }
+            });
+
+            html += '</div>';
+            resultado.innerHTML = html;
         }
     </script>
 </body>
