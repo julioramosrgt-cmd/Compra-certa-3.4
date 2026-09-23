@@ -192,10 +192,10 @@
             <div class="card">
                 <h2>📷 Leitura de Código de Barras</h2>
                 
-                <label for="barcode-file-input" class="btn btn-accent" style="cursor:pointer; text-align:center;">
-                    📷 Capturar Foto do Código (Alta Precisão)
-                </label>
-                <input type="file" id="barcode-file-input" accept="image/*" capture="environment" style="display:none;" onchange="processarImagemCodigo(this)">
+                <button class="btn btn-accent" onclick="document.getElementById('barcode-file-input').click()">
+                    📷 Capturar Foto do Código (Câmera Traseira)
+                </button>
+                <input type="file" id="barcode-file-input" accept="image/*" capture="user" style="display:none;" onchange="processarImagemCodigo(this)">
 
                 <button class="btn btn-secondary" style="margin-top:8px;" onclick="iniciarLeitorAoVivo()">🎥 Abrir Câmera Traseira ao Vivo</button>
                 <button class="btn btn-danger" id="btn-parar-ao-vivo" style="display:none; margin-top:8px;" onclick="pararLeitorAoVivo()">⏹️ Parar Câmera</button>
@@ -276,7 +276,7 @@
                 <h2>🧾 Registrar Cupom Fiscal</h2>
                 <p style="font-size:0.85rem; color:var(--text-sub);">Fotografe o cupom para realizar a leitura OCR automática dos itens, quantidades e descontos.</p>
                 
-                <input type="file" id="cupom-img-input" accept="image/*" capture="environment" style="display:none;" onchange="registrarFotoCupom(this)">
+                <input type="file" id="cupom-img-input" accept="image/*" style="display:none;" onchange="registrarFotoCupom(this)">
                 <button class="btn" onclick="document.getElementById('cupom-img-input').click()">📷 Tirar Foto do Cupom</button>
                 <p id="ocr-status" class="status-msg"></p>
             </div>
@@ -393,7 +393,7 @@
                 });
         }
 
-        // --- LEITOR CÂMARA AO VIVO (CORRIGIDO PARA ABRIR SEMPRE CÂMARA TRASEIRA) ---
+        // --- LEITOR CÂMARA AO VIVO ---
         async function iniciarLeitorAoVivo() {
             document.getElementById('reader-container').style.display = 'block';
             document.getElementById('btn-parar-ao-vivo').style.display = 'block';
@@ -433,7 +433,6 @@
             };
 
             try {
-                // Tenta selecionar diretamente a câmera com rótulo traseiro/environment através da lista de câmeras
                 const devices = await Html5Qrcode.getCameras();
                 let backCameraId = null;
 
@@ -445,7 +444,7 @@
                         d.label.toLowerCase().includes('environment')
                     );
                     if (backCam) backCameraId = backCam.id;
-                    else backCameraId = devices[devices.length - 1].id; // Geralmente a última da lista é a câmera traseira principal
+                    else backCameraId = devices[devices.length - 1].id;
                 }
 
                 if (backCameraId) {
@@ -454,7 +453,6 @@
                     await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {});
                 }
             } catch (err) {
-                // Fallback de segurança se a seleção por ID falhar
                 html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {})
                     .catch(e => {
                         alert("Erro ao abrir a câmera traseira: " + e);
@@ -649,7 +647,6 @@
                 localStorage.setItem('cc_cupons', JSON.stringify(cupons));
                 renderCupons();
 
-                // Processar OCR
                 const statusEl = document.getElementById('ocr-status');
                 statusEl.innerText = "⏳ Efetuando leitura inteligente do cupom (OCR)...";
 
@@ -666,7 +663,6 @@
             reader.readAsDataURL(file);
         }
 
-        // Extração de Produtos, Preços, Qtds e Descontos do texto do Cupom
         function processarTextoCupom(texto) {
             const linhas = texto.split('\n');
             itensCupomLidos = [];
