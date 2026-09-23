@@ -97,7 +97,6 @@
             box-sizing: border-box;
         }
         .btn-danger { background-color: var(--danger); }
-        .btn-small { width: auto; padding: 5px 10px; font-size: 0.8rem; }
         .item-row {
             display: flex;
             justify-content: space-between;
@@ -118,6 +117,12 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+        }
+        .status-msg {
+            font-size: 0.85rem;
+            color: var(--primary);
+            font-weight: bold;
+            margin-top: 8px;
         }
     </style>
 </head>
@@ -140,12 +145,12 @@
                 <h2>📷 Escanear Código de Barras</h2>
                 <button class="btn" onclick="iniciarLeitor()">📷 Abrir Câmera para Leitura</button>
                 <div id="interactive" class="viewport" style="display:none;"></div>
-                <p id="barcode-result" style="font-size:0.85rem; color:var(--primary); font-weight:bold;"></p>
+                <p id="barcode-status" class="status-msg"></p>
             </div>
 
             <div class="card">
                 <h2>🛒 Registrar Item no Carrinho</h2>
-                <input type="text" id="prod-nome" placeholder="Nome do Produto ou Código">
+                <input type="text" id="prod-nome" placeholder="Nome do Produto / Especificação">
                 <div style="display:flex; gap:10px;">
                     <input type="number" id="prod-qtd" placeholder="Qtd" value="1" min="1">
                     <input type="number" id="prod-preco" placeholder="Preço (R$)" step="0.01">
@@ -217,10 +222,39 @@
             `).join('');
         }
 
+        // BUSCAR DETALHES DO PRODUTO NA BASE DE DADOS VIA CÓDIGO DE BARRAS
+        async function buscarProdutoPorCodigo(codigo) {
+            const statusEl = document.getElementById('barcode-status');
+            statusEl.innerText = `Código ${codigo} lido! Buscando produto...`;
+
+            try {
+                const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${codigo}.json`);
+                const data = await res.json();
+
+                if (data.status === 1 && data.product) {
+                    const p = data.product;
+                    const nome = p.product_name_pt || p.product_name || p.generic_name || "Produto Escaneado";
+                    const marca = p.brands ? ` (${p.brands})` : "";
+                    const qtd = p.quantity ? ` - ${p.quantity}` : "";
+
+                    const especificacaoCompleta = `${nome}${marca}${qtd}`;
+                    document.getElementById('prod-nome').value = especificacaoCompleta;
+                    statusEl.innerText = `✓ Encontrado: ${especificacaoCompleta}`;
+                } else {
+                    document.getElementById('prod-nome').value = `Produto (${codigo})`;
+                    statusEl.innerText = `Código ${codigo} lido! (Produto não cadastrado na base pública, insira o nome manualmente).`;
+                }
+            } catch (err) {
+                document.getElementById('prod-nome').value = `Produto (${codigo})`;
+                statusEl.innerText = `Código ${codigo} lido! Insira o preço.`;
+            }
+        }
+
         // LEITOR DE CÓDIGO DE BARRAS
         function iniciarLeitor() {
             const viewport = document.getElementById('interactive');
             viewport.style.display = 'block';
+            document.getElementById('barcode-status').innerText = "Aponte a câmera para o código de barras...";
 
             Quagga.init({
                 inputStream: {
@@ -237,9 +271,8 @@
 
             Quagga.onDetected(function(result) {
                 const code = result.codeResult.code;
-                document.getElementById('barcode-result').innerText = "Código Lido: " + code;
-                document.getElementById('prod-nome').value = "Produto " + code;
                 pararLeitor();
+                buscarProdutoPorCodigo(code);
             });
         }
 
