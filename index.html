@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Compra Certa 3.4</title>
     <link rel="manifest" href="./manifest.webmanifest">
-    <!-- Biblioteca para leitura de código de barras via câmera -->
+    <!-- Biblioteca Quagga2 para navegadores legados -->
     <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <style>
         :root {
@@ -104,7 +104,7 @@
             padding: 8px 0;
             border-bottom: 1px solid var(--border);
         }
-        #interactive.viewport {
+        #camera-container {
             position: relative;
             width: 100%;
             height: 250px;
@@ -112,17 +112,19 @@
             border-radius: 8px;
             background: #000;
             margin-top: 10px;
+            display: none;
         }
-        #interactive.viewport video, #interactive.viewport canvas {
+        #video-preview {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
         .status-msg {
             font-size: 0.85rem;
-            color: var(--primary);
+            color: #57d9a3;
             font-weight: bold;
             margin-top: 8px;
+            word-break: break-word;
         }
     </style>
 </head>
@@ -144,7 +146,11 @@
             <div class="card">
                 <h2>📷 Escanear Código de Barras</h2>
                 <button class="btn" onclick="iniciarLeitor()">📷 Abrir Câmera para Leitura</button>
-                <div id="interactive" class="viewport" style="display:none;"></div>
+                <button class="btn btn-danger" id="btn-parar" style="display:none;" onclick="pararLeitor()">⏹️ Parar Câmera</button>
+                
+                <div id="camera-container">
+                    <video id="video-preview" playsinline></video>
+                </div>
                 <p id="barcode-status" class="status-msg"></p>
             </div>
 
@@ -191,6 +197,10 @@
     </main>
 
     <script>
+        let mediaStream = null;
+        let barcodeInterval = null;
+        let lastCodeRead = null;
+
         function switchTab(tabId, evt) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -222,65 +232,124 @@
             `).join('');
         }
 
-        // BUSCAR DETALHES DO PRODUTO NA BASE DE DADOS VIA CÓDIGO DE BARRAS
+        // BUSCA EM BANCO DE DADOS PÚBLICO (OPEN FOOD FACTS + CONSULTA EAN)
         async function buscarProdutoPorCodigo(codigo) {
             const statusEl = document.getElementById('barcode-status');
-            statusEl.innerText = `Código ${codigo} lido! Buscando produto...`;
+            statusEl.innerText = `🔍 Código EAN: ${codigo} — Buscando dados...`;
 
             try {
-                const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${codigo}.json`);
-                const data = await res.json();
+                // 1. Tenta Open Food Facts Brasil
+                const response = await fetch(`https://br.openfoodfacts.org/api/v2/product/${codigo}.json`);
+                const data = await response.json();
 
                 if (data.status === 1 && data.product) {
                     const p = data.product;
-                    const nome = p.product_name_pt || p.product_name || p.generic_name || "Produto Escaneado";
-                    const marca = p.brands ? ` (${p.brands})` : "";
-                    const qtd = p.quantity ? ` - ${p.quantity}` : "";
+                    const nome = p.product_name_pt || p.product_name || p.abbreviated_product_name || "";
+                    const marca = p.brands ? ` ${p.brands}` : "";
+                    const quantidade = p.quantity ? ` ${p.quantity}` : "";
 
-                    const especificacaoCompleta = `${nome}${marca}${qtd}`;
-                    document.getElementById('prod-nome').value = especificacaoCompleta;
-                    statusEl.innerText = `✓ Encontrado: ${especificacaoCompleta}`;
-                } else {
-                    document.getElementById('prod-nome').value = `Produto (${codigo})`;
-                    statusEl.innerText = `Código ${codigo} lido! (Produto não cadastrado na base pública, insira o nome manualmente).`;
+                    if (nome) {
+                        const descricaoCompleta = `${nome}${marca}${quantidade}`.trim();
+                        document.getElementById('prod-nome').value = descricaoCompleta;
+                        statusEl.innerText = `✅ Encontrado: ${descricaoCompleta}`;
+                        return;
+                    }
                 }
-            } catch (err) {
+
+                // 2. Caso não encontre na base primária
                 document.getElementById('prod-nome').value = `Produto (${codigo})`;
-                statusEl.innerText = `Código ${codigo} lido! Insira o preço.`;
+                statusEl.innerText = `⚠️ Código ${codigo} lido, mas produto não cadastrado na base pública. Digite o nome manualmente.`;
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('prod-nome').value = `Produto (${codigo})`;
+                statusEl.innerText = `⚠️ Código ${codigo} lido. Digite o preço e nome.`;
             }
         }
 
-        // LEITOR DE CÓDIGO DE BARRAS
-        function iniciarLeitor() {
-            const viewport = document.getElementById('interactive');
-            viewport.style.display = 'block';
-            document.getElementById('barcode-status').innerText = "Aponte a câmera para o código de barras...";
+        // INICIAR CÂMERA E DETECTOR
+        async function iniciarLeitor() {
+            const cameraContainer = document.getElementById('camera-container');
+            const video = document.getElementById('video-preview');
+            const statusEl = document.getElementById('barcode-status');
+            const btnParar = document.getElementById('btn-parar');
 
-            Quagga.init({
-                inputStream: {
-                    name: "Live",
-                    type: "LiveStream",
-                    target: viewport,
-                    constraints: { facingMode: "environment" }
-                },
-                decoder: { readers: ["ean_reader", "ean_8_reader", "code_128_reader"] }
-            }, function(err) {
-                if (err) { alert("Erro ao acessar a câmera: " + err); return; }
-                Quagga.start();
-            });
+            cameraContainer.style.display = 'block';
+            btnParar.style.display = 'block';
+            statusEl.innerText = "Apontando câmera... Mantenha o código focado e firme.";
 
-            Quagga.onDetected(function(result) {
-                const code = result.codeResult.code;
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } }
+                }).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } }));
+
+                video.srcObject = mediaStream;
+                await video.play();
+
+                // Usar BarcodeDetector nativo se disponível (Chrome Android moderno)
+                if ('BarcodeDetector' in window) {
+                    const barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'upc_a'] });
+                    
+                    barcodeInterval = setInterval(async () => {
+                        try {
+                            const barcodes = await barcodeDetector.detect(video);
+                            if (barcodes.length > 0) {
+                                const code = barcodes[0].rawValue;
+                                // Valida códigos EAN padrão (8 ou 13 dígitos numéricos)
+                                if (code && code.length >= 8 && /^\d+$/.test(code)) {
+                                    pararLeitor();
+                                    buscarProdutoPorCodigo(code);
+                                }
+                            }
+                        } catch (e) {}
+                    }, 300);
+
+                } else {
+                    // Fallback para Quagga2 com filtro rígido de precisão
+                    Quagga.init({
+                        inputStream: {
+                            name: "Live",
+                            type: "LiveStream",
+                            target: cameraContainer,
+                            constraints: { facingMode: "environment" }
+                        },
+                        decoder: { readers: ["ean_reader", "ean_8_reader"] },
+                        locate: true
+                    }, function(err) {
+                        if (err) { alert("Erro na câmera: " + err); return; }
+                        Quagga.start();
+                    });
+
+                    Quagga.onDetected(function(result) {
+                        const code = result.codeResult.code;
+                        // Evita leituras parciais exigindo tamanho exato de EAN-13 ou EAN-8
+                        if (code && (code.length === 13 || code.length === 8) && /^\d+$/.test(code)) {
+                            pararLeitor();
+                            buscarProdutoPorCodigo(code);
+                        }
+                    });
+                }
+
+            } catch (err) {
+                alert("Não foi possível acessar a câmera do celular: " + err);
                 pararLeitor();
-                buscarProdutoPorCodigo(code);
-            });
+            }
         }
 
         function pararLeitor() {
-            if (typeof Quagga !== 'undefined') {
-                Quagga.stop();
-                document.getElementById('interactive').style.display = 'none';
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
             }
+            if (barcodeInterval) {
+                clearInterval(barcodeInterval);
+                barcodeInterval = null;
+            }
+            if (typeof Quagga !== 'undefined') {
+                try { Quagga.stop(); } catch(e) {}
+            }
+            document.getElementById('camera-container').style.display = 'none';
+            document.getElementById('btn-parar').style.display = 'none';
         }
 
         if ('serviceWorker' in navigator) {
